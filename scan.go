@@ -46,6 +46,11 @@ func (d *Database) quoted(s string) string {
 	return d.Quote + s + d.Quote
 }
 
+// NthPlaceholder returns the nth placeholder
+func (d *Database) NthPlaceholder(n int) string {
+	return d.placeholder(n)
+}
+
 func (d *Database) placeholder(n int) string {
 	return strings.Replace(d.Placeholder, "1", strconv.FormatInt(int64(n), 10), 1)
 }
