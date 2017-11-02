@@ -41,6 +41,12 @@ var SQLite = &Database{
 	UseReturningToGetID: false,
 }
 
+var MSSQL = &Database{
+	Quote:               `"`,
+	Placeholder:         "$1",
+	UseReturningToGetID: true,
+}
+
 var QL = &Database{
 	Quote:                        ``,
 	Placeholder:                  "$1",
