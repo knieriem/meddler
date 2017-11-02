@@ -170,7 +170,7 @@ func (d *Database) Update(db DB, table string, src interface{}) error {
 	if pkValue < 1 {
 		return fmt.Errorf("meddler.Update: primary key must be an integer > 0")
 	}
-	ph := d.placeholder(len(placeholders) + 1)
+	ph := d.placeholder(len(placeholders)+1, d.goTypeKind(nil, src, pkName))
 
 	// run the query
 	q := fmt.Sprintf("UPDATE %s SET %s WHERE %s=%s", d.quoted(table),

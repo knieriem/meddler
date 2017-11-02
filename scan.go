@@ -17,9 +17,10 @@ const tagName = "meddler"
 // MySQL, PostgreSQL, and SQLite are provided for convenience.
 // Setting Default to any of these lets you use the package-level convenience functions.
 type Database struct {
-	Quote               string // the quote character for table and column names
-	Placeholder         string // the placeholder style to use in generated queries
-	UseReturningToGetID bool   // use PostgreSQL-style RETURNING "ID" instead of calling sql.Result.LastInsertID
+	Quote                        string // the quote character for table and column names
+	Placeholder                  string // the placeholder style to use in generated queries
+	CastPlaceholdersToGoTypeKind bool
+	UseReturningToGetID          bool // use PostgreSQL-style RETURNING "ID" instead of calling sql.Result.LastInsertID
 }
 
 var MySQL = &Database{
@@ -40,6 +41,13 @@ var SQLite = &Database{
 	UseReturningToGetID: false,
 }
 
+var QL = &Database{
+	Quote:                        ``,
+	Placeholder:                  "$1",
+	CastPlaceholdersToGoTypeKind: true,
+	UseReturningToGetID:          true,
+}
+
 var Default = MySQL
 
 func (d *Database) quoted(s string) string {
@@ -47,12 +55,16 @@ func (d *Database) quoted(s string) string {
 }
 
 // NthPlaceholder returns the nth placeholder
-func (d *Database) NthPlaceholder(n int) string {
-	return d.placeholder(n)
+func (d *Database) NthPlaceholder(n int, src interface{}, fieldName string) string {
+	return d.placeholder(n, d.goTypeKind(nil, src, fieldName))
 }
 
-func (d *Database) placeholder(n int) string {
-	return strings.Replace(d.Placeholder, "1", strconv.FormatInt(int64(n), 10), 1)
+func (d *Database) placeholder(n int, kind string) string {
+	ph := strings.Replace(d.Placeholder, "1", strconv.FormatInt(int64(n), 10), 1)
+	if kind == "" {
+		return ph
+	}
+	return kind + "(" + ph + ")"
 }
 
 // Debug enables debug mode, where unused columns and struct fields will be logged
@@ -61,6 +73,7 @@ var Debug = true
 type structField struct {
 	column     string
 	index      int
+	kind       reflect.Kind
 	primaryKey bool
 	meddler    Meddler
 }
@@ -155,6 +168,7 @@ func getFields(dstType reflect.Type) (*structData, error) {
 			column:     name,
 			primaryKey: name == data.pk,
 			index:      i,
+			kind:       f.Type.Kind(),
 			meddler:    meddler,
 		}
 		data.columns = append(data.columns, name)
@@ -337,7 +351,7 @@ func (d *Database) Placeholders(src interface{}, includePk bool) ([]string, erro
 		if !includePk && name == data.pk {
 			continue
 		}
-		ph := d.placeholder(len(placeholders) + 1)
+		ph := d.placeholder(len(placeholders)+1, d.goTypeKind(data, src, name))
 		placeholders = append(placeholders, ph)
 	}
 
@@ -364,6 +378,23 @@ func (d *Database) PlaceholdersString(src interface{}, includePk bool) (string, 
 // PlaceholdersString using the Default Database type
 func PlaceholdersString(src interface{}, includePk bool) (string, error) {
 	return Default.PlaceholdersString(src, includePk)
+}
+
+// goTypeKind returns a string containing the underlying Go type of a field,
+// if casting placeholders is necessary for the given Database, otherwise
+// an empty string
+func (d *Database) goTypeKind(data *structData, src interface{}, fieldName string) string {
+	if !d.CastPlaceholdersToGoTypeKind {
+		return ""
+	}
+	if data == nil {
+		d, err := getFields(reflect.TypeOf(src))
+		if err != nil {
+			return ""
+		}
+		data = d
+	}
+	return data.fields[fieldName].kind.String()
 }
 
 // scan a single row of data into a struct.
